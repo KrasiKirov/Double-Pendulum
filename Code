@@ -1,0 +1,207 @@
+#Import libraries which will be necessary to simulate a double pendulum
+import math
+import numpy as np
+import pandas as pd
+
+
+class DoublePendulumLagrangian:
+  #Constants which apply for all instances
+  dt=0.01
+  T=40
+  steps=(T/dt)
+
+  def __init__(self, g, m_1, m_2, t_1, t_2, w_1, w_2, L_1, L_2,dt,list_t_1,list_t_2,list_w_1,list_w_2,time_index,list_potential_energy,list_kinetic_energy):
+        #Initiliaze the parameters necessary to construct a double pendulum simulation.
+        #The Lagrange eqautions will be used.
+        #Ball 1 is attached to a fixed pivot, while the Ball 2 is attached to Ball 1.
+     
+        self.g = g           #The gravitational acceleration
+        self.m_1 = m_1       #The mass of Ball 1   
+        self.m_2 = m_2       #The mass of Ball 2
+        self.t_1 = t_1       #The initial angle of Ball 1
+        self.t_2 = t_2       #The initial angle of Ball 2
+        self.w_1 = w_1       #The initial angular velocity of Ball 1 
+        self.w_2 = w_2       #The initial angular velocity of Ball 2         
+        self.L_1 = L_1       #The length of the rod linking Ball 1 to the fixed pivot
+        self.L_2 = L_2       #The length of the rod linking Ball 2 to Ball 1
+        self.dt=dt           #The time interval between each step 
+        self.list_t_1=[]     #Initialization of the list which will save the t_1 at each step
+        self.list_t_2=[]     #Initialization of the list which will save the t_2 at each step
+        self.list_w_1=[]     #Initialization of the list which will save the w_1 at each step
+        self.list_w_2=[]     #Initialization of the list which will save the w_2 at each step
+        self.time_index=[0,] #Initialization of the list which will save the time at each step
+        self.list_potential_energy=[] #Initialization of the list which will save the potential energy at each step
+        self.list_kinetic_energy=[] #Initialization of the list which will save the kinetic energy at each step
+        
+  def potential_energy(self):
+
+        #Compute the potential energy of the double pendulum system
+        m_1 = self.m_1
+        t_1 = self.t_1
+        L_1 = self.L_1
+        m_2 = self.m_2
+        t_2 = self.t_2
+        L_2 = self.L_2
+        g = self.g
+
+        #Calculate the height of each Ball
+        y1 = -L_1 * math.cos(t_1)
+        y2 = y1 - L_2 * math.cos(t_2)
+        return m_1 * g * y1 + m_2 * g * y2
+    
+  def kinetic_energy(self):
+
+        #Compute the kinetic energy of the double pendulum system
+        m_1 = self.m_1
+        t_1 = self.t_1
+        w_1 = self.w_1
+        L_1 = self.L_1
+        m_2 = self.m_2
+        t_2 = self.t_2
+        w_2 = self.w_2
+        L_2 = self.L_2
+
+        # compute the kinetic energy of each ball
+        K1 = 0.5 * m_1 * (L_1 * w_1)**2
+        K2 = 0.5 * m_2 * ((L_1 * w_1)**2 + (L_2 * w_2)**2 +
+                         2 * L_1 * L_2 * w_1 * w_2 * math.cos(t_1 - t_2))
+        return K1 + K2
+
+  def lagrange_rhs(self, t_1, t_2, w_1, w_2):
+
+        #Compute the right-hand side of the Lagrange equations for the double pendulum and return it as an array.     
+        import pandas as pd
+        import numpy as np
+        m_1 = self.m_1
+        L_1 = self.L_1
+        m_2 = self.m_2
+        L_2 = self.L_2
+        g = self.g
+
+        a_1 = (L_2 / L_1) * (m_2 / (m_1 + m_2)) * math.cos(t_1 - t_2)   #a_1 and a_2 are the deflection angles for each of the two parts of the pendulum
+        a_2 = (L_1 / L_2) * math.cos(t_1 - t_2)
+
+        f_1 = -(L_2 / L_1) * (m_2 / (m_1 + m_2)) * (w_2**2) * math.sin(t_1 - t_2) - (g / L_1) * math.sin(t_1)
+        f_2 = (L_1 / L_2) * (w_1**2) * math.sin(t_1 - t_2) - (g / L_2) * math.sin(t_2)
+
+        g1 = (f_1 - a_1 * f_2) / (1 - a_1 * a_2)
+        g2 = (f_2 - a_2 * f_1) / (1 - a_1 * a_2)
+        return np.array([w_1, w_2, g1, g2])
+
+  def time_step(self, dt):
+
+        #Advance one time step using the classical Runge-Kutta method
+        m_1 = self.m_1
+        t_1 = self.t_1
+        w_1 = self.w_1
+        L_1 = self.L_1
+        m_2 = self.m_2
+        t_2 = self.t_2
+        w_2 = self.w_2
+        L_2 = self.L_2
+        dt=self.dt
+
+        # y is an array with the generalized coordinates (angles and angular velocities)
+        y = np.array([t_1, t_2, w_1, w_2])  
+
+        # compute the Runge-Kutta constants
+        k1 = self.lagrange_rhs(*y)
+        k2 = self.lagrange_rhs(*(y + dt * k1 / 2))
+        k3 = self.lagrange_rhs(*(y + dt * k2 / 2))
+        k4 = self.lagrange_rhs(*(y + dt * k3))
+
+        # compute the Runge-Kutta right-hand side
+        R = 1.0 / 6.0 * dt * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+
+        # update the angles and angular velocities
+        self.t_1 += R[0]
+        self.t_2 += R[1]
+        self.w_1 += R[2]
+        self.w_2 += R[3]
+        self.list_t_1.append(t_1)
+        self.list_t_2.append(t_2)
+        self.list_w_1.append(w_1)
+        self.list_w_2.append(w_2)
+
+        #update the kinetic and potential energies of the system
+        self.list_potential_energy.append(self.potential_energy())
+        self.list_kinetic_energy.append(self.kinetic_energy())
+
+  def simulate(self):
+    # This is the main loop for which all the above functions are running until the maximum time has been reached
+    
+    self.potential_energy()
+    self.kinetic_energy()
+    i=0
+
+    dt=0.01
+    T=40
+    steps=(T/dt)
+    while i<steps:
+      self.lagrange_rhs(self.t_1,self.t_2,self.w_1,self.w_2)
+      self.time_step(self.dt)
+      i=i+1
+    i=0
+    while i<(steps-1): #This is done so that the time_index has the same shape as the other parameters,
+    #as it was already given an initial value.
+      self.time_index.append(self.time_index[-1]+self.dt)
+      i=i+1
+      
+      
+     ## Define Double Pendulum instance DP with set initial parameters
+DP=DoublePendulumLagrangian(
+    9.8,
+    1,
+    1,
+    0.5,
+    0.5,
+    0,
+    0,
+    0.5,
+    1,
+    0.01,
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],)
+    
+#Simulate the double pendulum system
+DP.simulate()
+
+
+dt=0.01
+T=40
+steps=(T/dt)
+
+#Create the lists which save the x-positions for each of the pendulums, based on the length of the respective rod
+#and on the respective angle at each time step
+list_x_1=[]
+i=0
+while i<steps:
+  list_x_1.append(DP.L_1*math.sin(DP.list_t_1[i]))
+  i=i+1
+
+list_x_2=[]
+i=0
+while i<steps:
+  list_x_2.append(DP.L_2*math.sin(DP.list_t_2[i])+list_x_1[i])
+  i=i+1
+
+#Create the lists which save the y-positions for each of the pendulums, based on the length of the respective rod
+#and on the respective angle at each time step
+list_y_1=[]
+i=0
+while i<steps:
+  list_y_1.append(-(DP.L_1*math.cos(DP.list_t_1[i])))
+  i=i+1
+
+list_y_2=[]
+i=0
+while i<steps:
+  list_y_2.append((list_y_1[i])-(DP.L_2*math.cos(DP.list_t_2[i])))
+  i=i+1
+
+
